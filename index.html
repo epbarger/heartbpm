@@ -1,0 +1,106 @@
+<html>
+  <head>
+    <title>HeartBPM</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <meta charset="utf-8"/>
+  </head>
+  <body>
+    <h1 id='bpmDisplay'>0 BPM</h1>
+    <h4 id='numTapsDisplay'>0 Taps Recorded</h5>
+    <p>BPM will auto reset after 3 seconds with no tap</p>
+    <button id='tapButton' autofocus>Tap</button>
+    <button id='resetButton'>Reset</button>
+    <button id='saveButton'>Save</button>
+    <br>
+    <br>
+    <h4> Saved BPMS </h4>
+    <div id='savedBeats'>
+    </div>
+
+    <script>
+      let newBPM = {
+        taps: [],
+        savedBeats: [],
+        nextTapReset: false,
+        loadSavedBeats: function() {
+          let storedJson = localStorage.getItem('heartbpm-savedBeats')
+          if ((storedJson !== null) && (storedJson != "")){
+            try {
+              this.savedBeats = JSON.parse(storedJson)
+            } catch (e) {
+              console.error(e)
+            }          
+          }
+        },
+        newTap: function() {
+          if (this.nextTapReset) {
+            this.nextTapReset = false
+            this.clearTaps()
+          }
+          this.taps.push({tapTime: Date.now()})
+          setTimeout(function(time){
+            if ((this.taps.length > 0) && (this.taps[this.taps.length - 1].tapTime <= time)) {
+              this.nextTapReset = true
+            }
+          }.bind(this, Date.now()), 3000)
+          this.updateDisplay()
+        },
+        currentBPM: function() {
+          // calculate the delta between neighboring taps
+          let diffs = []
+          for (let i = this.taps.length - 1; i > 0; i--){
+            diffs.push(this.taps[i].tapTime - this.taps[i-1].tapTime)
+          }
+
+          if (diffs.length > 0) {
+            // average the diffs
+            let sum = diffs.reduce(function(sum, diff) { return sum + diff; });
+            let avg = sum / diffs.length;
+            return Math.round(60000 / avg) // 60000 ms in a minute, so this gives BPM
+          } else {
+            return 0
+          }
+        },
+        updateDisplay: function() {
+          document.getElementById("bpmDisplay").innerHTML = this.currentBPM() + " BPM"
+          document.getElementById("numTapsDisplay").innerHTML = this.taps.length + " Taps Recorded"
+          let beatDivs = []
+          for (let i = 0; i < this.savedBeats.length; i++){
+            let savedBeat = this.savedBeats[i]
+            beatDivs.push("<div> " + (new Date(savedBeat.timestamp)) + " - " + savedBeat.bpm + " BPM (" + savedBeat.numberBeats + " samples) </div>")
+          }
+          document.getElementById("savedBeats").innerHTML = beatDivs.join('')
+        },
+        clearTaps: function() {
+          this.taps = []
+          this.updateDisplay()
+        },
+        saveBPM: function() {
+          this.savedBeats.push({ 
+            bpm: this.currentBPM(),
+            timestamp: this.taps[this.taps.length - 1].tapTime,
+            numberBeats: this.taps.length
+          })
+          localStorage.setItem('heartbpm-savedBeats', JSON.stringify(this.savedBeats))
+        }
+      }
+
+      newBPM.loadSavedBeats()
+      newBPM.updateDisplay()
+
+      document.getElementById("tapButton").addEventListener("click", (e) => {
+        e.target.focus()
+        newBPM.newTap()
+      })
+
+      document.getElementById("resetButton").addEventListener("click", (e) => {
+        newBPM.clearTaps()
+      })
+
+      document.getElementById("saveButton").addEventListener("click", (e) => {
+        newBPM.saveBPM()
+        newBPM.clearTaps()
+      })
+    </script>
+  </body>
+</html>
